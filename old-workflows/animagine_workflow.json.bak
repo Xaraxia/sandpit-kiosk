@@ -1,0 +1,153 @@
+{
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "__INPUT_IMAGE_PATH__",
+      "upload": "image"
+    }
+  },
+  "2": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "animagine-xl-3.1.safetensors"
+    }
+  },
+  "3": {
+    "class_type": "CLIPSetLastLayer",
+    "inputs": {
+      "clip": [
+        "2",
+        1
+      ],
+      "stop_at_clip_layer": -2
+    }
+  },
+  "4": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ],
+      "width": 1024,
+      "height": 1024,
+      "upscale_method": "bilinear",
+      "crop": "disabled"
+    }
+  },
+  "5": {
+    "class_type": "ImageUpscaleWithModel",
+    "inputs": {
+      "upscale_model": [
+        "6",
+        0
+      ],
+      "image": [
+        "4",
+        0
+      ]
+    }
+  },
+  "6": {
+    "class_type": "UpscaleModelLoader",
+    "inputs": {
+      "model_name": "4x-AnimeSharp.pth"
+    }
+  },
+  "7": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "5",
+        0
+      ],
+      "width": 1600,
+      "height": 1600,
+      "upscale_method": "bilinear",
+      "crop": "disabled"
+    }
+  },
+  "8": {
+    "class_type": "VAEEncode",
+    "inputs": {
+      "pixels": [
+        "7",
+        0
+      ],
+      "vae": [
+        "2",
+        2
+      ]
+    }
+  },
+  "9": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "3",
+        0
+      ],
+      "text": "__POSITIVE_PROMPT__"
+    }
+  },
+  "10": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "3",
+        0
+      ],
+      "text": "worst quality, low quality, normal quality, lowres, watermark, text, signature, jpeg artifacts, blurry, 3d, photorealistic, multiple people, bad anatomy, extra limbs, missing limbs"
+    }
+  },
+  "11": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "2",
+        0
+      ],
+      "positive": [
+        "9",
+        0
+      ],
+      "negative": [
+        "10",
+        0
+      ],
+      "latent_image": [
+        "8",
+        0
+      ],
+      "seed": 3512096947,
+      "steps": 30,
+      "cfg": 7.0,
+      "sampler_name": "euler_ancestral",
+      "scheduler": "ddim_uniform",
+      "denoise": 0.6
+    }
+  },
+  "12": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "11",
+        0
+      ],
+      "vae": [
+        "2",
+        2
+      ]
+    }
+  },
+  "13": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "12",
+        0
+      ],
+      "filename_prefix": "__OUTPUT_FILENAME_PREFIX__"
+    }
+  }
+}

@@ -2,13 +2,13 @@
 pipeline.py
 -----------
 Talks to a locally-running ComfyUI instance (default http://localhost:8188)
-to generate an anime-style portrait using Flux.1-dev fp8 + PuLID for
+to generate an anime-style portrait using Animagine XL 3.1 + IPAdapter for
 identity-preserving face conditioning.
 
 Public interface:
-    load_pipeline()          -- verify ComfyUI is reachable
+    load_pipeline()          -- verify ComfyUI is reachable, load workflow template
     get_status()             -- health check dict for /api/status
-    generate_portrait()      -- run generation, return Path to output png
+    generate_portrait()      -- run generation, return Path to output image
     KioskPipelineError       -- raised on known-bad conditions
 """
 
@@ -27,7 +27,7 @@ logger = logging.getLogger("kiosk.pipeline")
 # ---------------------------------------------------------------------------
 
 COMFYUI_URL        = "http://localhost:8188"
-WORKFLOW_PATH      = Path(__file__).resolve().parent / "flux_kontext_workflow.json"
+WORKFLOW_PATH      = Path(__file__).resolve().parent / "animagine_workflow_api.json"
 OUTPUT_DIR         = Path(__file__).resolve().parent / "outputs"
 TEMP_DIR           = Path(__file__).resolve().parent / "temp"
 COMFYUI_OUTPUT_DIR = Path.home() / "ComfyUI" / "output"
@@ -35,33 +35,42 @@ COMFYUI_OUTPUT_DIR = Path.home() / "ComfyUI" / "output"
 GENERATION_TIMEOUT = 180
 POLL_INTERVAL      = 2.0
 
+# Placeholder tokens expected inside the workflow JSON template.
+PLACEHOLDER_IMAGE   = "__INPUT_IMAGE_PATH__"
+PLACEHOLDER_PROMPT  = "__POSITIVE_PROMPT__"
+PLACEHOLDER_PREFIX  = "__OUTPUT_FILENAME_PREFIX__"
+
 # ---------------------------------------------------------------------------
-# Research field -> background/scene prompt elements
+# Research field -> background/scene motif
+#
+# Same pattern as the earlier (abandoned) Flux pipeline: per-discipline
+# background dressing layered onto the fixed superhero-researcher template.
+# Keys are matched case-insensitively against the dropdown values the
+# frontend sends (see app.py RESEARCH_FIELDS).
 # ---------------------------------------------------------------------------
 
 FIELD_MOTIFS = {
     "physics":               "glowing particle accelerator rings, floating luminous equations, electric plasma arcs",
-    "biology":               "bioluminescent spores, softly glowing DNA helices, organic light trails",
-    "computer science":      "cascading streams of glowing code, holographic data structures, circuit light patterns",
-    "medicine":              "radiant caduceus symbols, soft pulse waveforms, glowing cellular structures",
-    "chemistry":             "crystalline molecular bonds, glowing periodic element symbols, prism refractions",
-    "engineering":           "blueprint grid dissolving into golden light, structural framework glowing, gear mechanisms in light",
-    "astronomy":             "deep space nebula clouds, star field with comet trails, galactic spiral arms glowing",
-    "psychology":            "synaptic light connections, soft neural network patterns, calm aurora waves",
-    "mathematics":           "golden ratio spiral in light, floating geometric proofs, fractal patterns blooming",
-    "environmental science": "aurora borealis ribbons, bioluminescent ocean wave patterns, soft leaf and wind particles",
-    "other":                 "radiant abstract energy patterns, swirling light particles, dramatic volumetric light rays",
+    "biology":                "bioluminescent spores, softly glowing dna helices, organic light trails",
+    "computer science":       "cascading streams of glowing code, holographic data structures, circuit light patterns",
+    "medicine":               "radiant caduceus symbols, soft pulse waveforms, glowing cellular structures",
+    "chemistry":              "crystalline molecular bonds, glowing periodic element symbols, prism refractions",
+    "engineering":            "blueprint grid dissolving into golden light, structural framework glowing, gear mechanisms in light",
+    "astronomy":              "deep space nebula clouds, star field with comet trails, galactic spiral arms glowing",
+    "psychology":             "synaptic light connections, soft neural network patterns, calm aurora waves",
+    "mathematics":            "golden ratio spiral in light, floating geometric proofs, fractal patterns blooming",
+    "environmental science":  "aurora borealis ribbons, bioluminescent ocean wave patterns, soft leaf and wind particles",
+    "other":                  "radiant abstract energy patterns, swirling light particles, dramatic volumetric light rays",
 }
 
-# Kontext uses editing instructions, not descriptions.
-# Tell it what to change, keep the rest implicit.
+# Tag-style prompt (Animagine/SDXL convention), not instruction-style.
+# {field_motif} is substituted per guest; everything else is fixed and
+# matches the tuned settings from animagine_workflow.json.
 PROMPT_TEMPLATE = (
-    "Convert this photo to a vibrant anime illustration. "
-    "Keep the person's face, identity and expression exactly the same. "
-    "Render in cel-shaded anime style with clean linework and expressive eyes. "
-    "Show the person in a triumphant heroic pose with one fist raised. "
-    "Add {field_motif} dramatically in the background. "
-    "High quality anime art style."
+    "masterpiece, best quality, year 2024, crisp anime style, 1person, solo, "
+    "detailed face, identity-preserving, superhero researcher costume, "
+    "superhero pose, standing in a high-tech laboratory, supercomputer screens, "
+    "{field_motif}, vibrant colors, realistic skintone"
 )
 
 # ---------------------------------------------------------------------------
@@ -163,10 +172,38 @@ def load_pipeline():
     if not WORKFLOW_PATH.exists():
         raise RuntimeError(
             f"Workflow file not found: {WORKFLOW_PATH}\n"
-            "Place flux_pulid_workflow.json next to pipeline.py."
+            "Export the tuned animagine_workflow.json graph in API format "
+            "(ComfyUI menu: Workflow > Export (API Format)) and save it as "
+            f"{WORKFLOW_PATH.name} next to pipeline.py."
         )
     with open(WORKFLOW_PATH) as f:
-        _state["workflow"] = json.load(f)
+        workflow = json.load(f)
+
+    # Fail fast and loud if the expected placeholders aren't present —
+    # better to catch a bad export now than at the kiosk mid-event.
+    found = {PLACEHOLDER_IMAGE: False, PLACEHOLDER_PROMPT: False, PLACEHOLDER_PREFIX: False}
+    has_ksampler = False
+    for node in workflow.values():
+        if not isinstance(node, dict):
+            continue
+        if node.get("class_type") == "KSampler":
+            has_ksampler = True
+        for v in node.get("inputs", {}).values():
+            # inputs can be plain values or [node_id, output_index] link
+            # references — only strings are eligible placeholder matches.
+            if isinstance(v, str) and v in found:
+                found[v] = True
+
+    missing = [k for k, present in found.items() if not present]
+    if missing:
+        raise RuntimeError(
+            f"Workflow template is missing expected placeholder(s): {missing}. "
+            f"Check the LoadImage, CLIPTextEncode, and SaveImage nodes in {WORKFLOW_PATH.name}."
+        )
+    if not has_ksampler:
+        raise RuntimeError(f"No KSampler node found in {WORKFLOW_PATH.name}.")
+
+    _state["workflow"] = workflow
 
     try:
         _comfy_get("/system_stats")
@@ -193,15 +230,18 @@ def get_status() -> dict:
 
 def generate_portrait(photo_path: Path, research_field: str, save_id: str) -> Path:
     """
-    Generate an anime-style portrait with Flux + PuLID face conditioning.
+    Generate an anime-style portrait with Animagine XL 3.1 + IPAdapter
+    face conditioning.
 
     Args:
         photo_path:     Path to webcam capture JPEG (deleted after upload).
-        research_field: Guest's field (selects background motif).
+        research_field: Guest's field (selects background motif). Falls back
+                         to a generic motif if unrecognised — never errors
+                         on this field, since it only affects flavour text.
         save_id:        UUID stem for output filename.
 
     Returns:
-        Path to generated .png in OUTPUT_DIR.
+        Path to generated image in OUTPUT_DIR.
     """
     if not _state["ready"]:
         raise KioskPipelineError("Pipeline not ready. Please wait and try again.")
@@ -209,9 +249,9 @@ def generate_portrait(photo_path: Path, research_field: str, save_id: str) -> Pa
         raise KioskPipelineError("Photo missing. Please retake your photo.")
 
     # Build prompt
-    motif   = FIELD_MOTIFS.get(research_field.strip().lower(), FIELD_MOTIFS["other"])
-    prompt  = PROMPT_TEMPLATE.format(field_motif=motif)
-    logger.info("[%s] Prompt: %.120s...", save_id, prompt)
+    motif  = FIELD_MOTIFS.get(research_field.strip().lower(), FIELD_MOTIFS["other"])
+    prompt = PROMPT_TEMPLATE.format(field_motif=motif)
+    logger.info("[%s] Field: %s | Prompt: %.120s...", save_id, research_field, prompt)
 
     # Upload photo
     try:
@@ -225,20 +265,22 @@ def generate_portrait(photo_path: Path, research_field: str, save_id: str) -> Pa
         except Exception:
             pass
 
-    # Substitute placeholders into workflow
+    # Substitute placeholders into a fresh copy of the workflow template
     workflow = json.loads(json.dumps(_state["workflow"]))
     for node in workflow.values():
         if not isinstance(node, dict):
             continue
         inputs = node.get("inputs", {})
         for k, v in inputs.items():
-            if v == "__INPUT_IMAGE_PATH__":
+            if v == PLACEHOLDER_IMAGE:
                 inputs[k] = uploaded_name
-            elif v == "__POSITIVE_PROMPT__":
+            elif v == PLACEHOLDER_PROMPT:
                 inputs[k] = prompt
-            elif v == "__OUTPUT_FILENAME_PREFIX__":
+            elif v == PLACEHOLDER_PREFIX:
                 inputs[k] = save_id
-        # Always randomise KSampler seed
+        # Always randomise the seed per guest. The graph itself is kept on
+        # a fixed seed for repeatable A/B tuning in the ComfyUI UI — this
+        # is the one place that fixed value must NOT survive into a live run.
         if node.get("class_type") == "KSampler":
             inputs["seed"] = int(uuid.uuid4().int % (2 ** 32))
 

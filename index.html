@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Research Portrait Kiosk</title>
+<style>
+  /* ── Tokens ── */
+  :root {
+    --bg:         #0a0a12;
+    --surface:    #13131f;
+    --surface2:   #1c1c2e;
+    --accent:     #7c5cfc;
+    --accent2:    #c084fc;
+    --text:       #e8e6f0;
+    --muted:      #6b6880;
+    --success:    #34d399;
+    --error:      #f87171;
+    --radius:     12px;
+    --font-body:  'Segoe UI', system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem 4rem;
+  }
+
+  /* ── Header ── */
+  header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+  }
+  header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.4rem;
+  }
+  header p {
+    color: var(--muted);
+    font-size: 0.95rem;
+    max-width: 480px;
+    line-height: 1.5;
+  }
+
+  /* ── Card ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid rgba(124,92,252,0.15);
+    border-radius: var(--radius);
+    padding: 2rem;
+    width: 100%;
+    max-width: 560px;
+    margin-bottom: 1.5rem;
+  }
+  .card h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--accent2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 1.2rem;
+  }
+
+  /* ── Steps indicator ── */
+  .steps {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+  }
+  .step-dot {
+    flex: 1;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--surface2);
+    transition: background 0.3s;
+  }
+  .step-dot.active  { background: var(--accent); }
+  .step-dot.done    { background: var(--accent2); }
+
+  /* ── Webcam / preview ── */
+  .cam-wrap {
+    position: relative;
+    background: var(--surface2);
+    border-radius: var(--radius);
+    overflow: hidden;
+    aspect-ratio: 4/3;
+    width: 100%;
+  }
+  #webcam, #snapshot {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  #snapshot { display: none; }
+
+  .cam-overlay {
+    position: absolute;
+    inset: 0;
+    border: 2px solid rgba(124,92,252,0.4);
+    border-radius: var(--radius);
+    pointer-events: none;
+  }
+
+  /* corner accents */
+  .cam-overlay::before,
+  .cam-overlay::after {
+    content: '';
+    position: absolute;
+    width: 24px; height: 24px;
+    border-color: var(--accent);
+    border-style: solid;
+  }
+  .cam-overlay::before {
+    top: 8px; left: 8px;
+    border-width: 2px 0 0 2px;
+  }
+  .cam-overlay::after {
+    bottom: 8px; right: 8px;
+    border-width: 0 2px 2px 0;
+  }
+
+  /* ── Video result ── */
+  #result-video {
+    width: 100%;
+    border-radius: var(--radius);
+    display: none;
+    background: #000;
+  }
+
+  /* ── Form elements ── */
+  label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 0.4rem;
+    margin-top: 1rem;
+  }
+  label:first-of-type { margin-top: 0; }
+
+  input[type="text"],
+  input[type="email"],
+  select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid rgba(124,92,252,0.2);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 1rem;
+    padding: 0.65rem 0.9rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  input:focus, select:focus {
+    border-color: var(--accent);
+  }
+  select option { background: var(--surface2); }
+
+  /* custom field text input */
+  #custom-field-wrap { margin-top: 0.6rem; display: none; }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0.75rem 1.4rem;
+    transition: opacity 0.2s, transform 0.1s;
+    width: 100%;
+    margin-top: 1.2rem;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff;
+  }
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid rgba(124,92,252,0.25);
+  }
+  .btn-success {
+    background: var(--success);
+    color: #0a0a12;
+  }
+
+  .btn-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin-top: 1.2rem;
+  }
+  .btn-row .btn { margin-top: 0; }
+
+  /* ── Status / error messages ── */
+  .status-msg {
+    text-align: center;
+    font-size: 0.9rem;
+    padding: 0.6rem 1rem;
+    border-radius: 8px;
+    margin-top: 1rem;
+    display: none;
+  }
+  .status-msg.error   { background: rgba(248,113,113,0.12); color: var(--error); display: block; }
+  .status-msg.info    { background: rgba(124,92,252,0.12);  color: var(--accent2); display: block; }
+  .status-msg.success { background: rgba(52,211,153,0.12);  color: var(--success); display: block; }
+
+  /* ── Generating spinner ── */
+  .spinner-wrap {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 2rem 0;
+    text-align: center;
+  }
+  .spinner-wrap.visible { display: flex; }
+  .spinner {
+    width: 48px; height: 48px;
+    border: 3px solid rgba(124,92,252,0.2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner-wrap p { color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+  .spinner-wrap strong { color: var(--text); display: block; font-size: 1rem; }
+
+  /* ── Consent note ── */
+  .consent {
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 1rem;
+    line-height: 1.5;
+  }
+
+  /* ── Section visibility ── */
+  .section { display: none; }
+  .section.active { display: block; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Research Portrait Studio</h1>
+  <p>Strike your best hero pose — we'll render you as a cinematic anime character in your field of research.</p>
+</header>
+
+<!-- Progress dots -->
+<div class="steps" id="steps">
+  <div class="step-dot active" id="dot-0"></div>
+  <div class="step-dot" id="dot-1"></div>
+  <div class="step-dot" id="dot-2"></div>
+  <div class="step-dot" id="dot-3"></div>
+</div>
+
+<!-- ── Step 0: Camera ── -->
+<div class="card section active" id="section-camera">
+  <h2>Step 1 — Take your photo</h2>
+  <div class="cam-wrap">
+    <video id="webcam" autoplay playsinline muted></video>
+    <img id="snapshot" alt="Your captured photo">
+    <div class="cam-overlay"></div>
+  </div>
+  <div id="cam-msg" class="status-msg"></div>
+  <div class="btn-row" id="cam-buttons-initial">
+    <button class="btn btn-primary" id="btn-capture">📸 Take Photo</button>
+  </div>
+  <div class="btn-row" style="display:none" id="cam-buttons-retake">
+    <button class="btn btn-secondary" id="btn-retake">↩ Retake</button>
+    <button class="btn btn-primary" id="btn-use-photo">Use this photo →</button>
+  </div>
+  <p class="consent">Your photo is only used for this generation and deleted immediately afterwards.</p>
+</div>
+
+<!-- ── Step 1: Details ── -->
+<div class="card section" id="section-details">
+  <h2>Step 2 — About you</h2>
+
+  <label for="input-name">Your name</label>
+  <input type="text" id="input-name" placeholder="Dr Jane Smith" autocomplete="off">
+
+  <label for="input-email">Email address <span style="color:var(--muted);font-weight:400">(we'll send your video here)</span></label>
+  <input type="email" id="input-email" placeholder="jane@university.edu.au" autocomplete="off">
+
+  <label for="input-field">Field of research</label>
+  <select id="input-field">
+    <option value="" disabled selected>Choose your field…</option>
+    {% for f in fields %}
+    <option value="{{ f.lower() }}">{{ f }}</option>
+    {% endfor %}
+    <option value="other">Other…</option>
+  </select>
+
+  <div id="custom-field-wrap">
+    <input type="text" id="input-custom-field" placeholder="e.g. Marine Archaeology">
+  </div>
+
+  <div id="details-msg" class="status-msg"></div>
+  <button class="btn btn-primary" id="btn-generate">✨ Generate my portrait</button>
+  <button class="btn btn-secondary" id="btn-back-camera" style="margin-top:0.5rem">← Retake photo</button>
+</div>
+
+<!-- ── Step 2: Generating ── -->
+<div class="card section" id="section-generating">
+  <h2>Step 3 — Rendering…</h2>
+  <div class="spinner-wrap visible">
+    <div class="spinner"></div>
+    <p>
+      <strong id="gen-name-display"></strong>
+      Generating your cinematic anime portrait.<br>
+      This takes about 30–60 seconds — strike a pose and hold it! 🦸
+    </p>
+  </div>
+</div>
+
+<!-- ── Step 3: Result ── -->
+<div class="card section" id="section-result">
+  <h2>Your portrait is ready!</h2>
+  <img id="result-image" style="width:100%;border-radius:12px;display:none" alt="Your anime portrait">
+  <div id="result-msg" class="status-msg success">
+    We'll email this to you after the event. Thanks for stopping by!
+  </div>
+  <button class="btn btn-success" id="btn-restart">🎉 Done — next person</button>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+const state = {
+  sessionId:  null,
+  stream:     null,
+};
+
+// ---------------------------------------------------------------------------
+// DOM refs
+// ---------------------------------------------------------------------------
+const webcam           = document.getElementById('webcam');
+const snapshot         = document.getElementById('snapshot');
+const camMsg           = document.getElementById('cam-msg');
+const camButtonsInit   = document.getElementById('cam-buttons-initial');
+const camButtonsRetake = document.getElementById('cam-buttons-retake');
+const btnCapture       = document.getElementById('btn-capture');
+const btnRetake        = document.getElementById('btn-retake');
+const btnUsePhoto      = document.getElementById('btn-use-photo');
+const btnGenerate      = document.getElementById('btn-generate');
+const btnBackCamera    = document.getElementById('btn-back-camera');
+const btnRestart       = document.getElementById('btn-restart');
+const inputName        = document.getElementById('input-name');
+const inputEmail       = document.getElementById('input-email');
+const inputField       = document.getElementById('input-field');
+const inputCustomField = document.getElementById('input-custom-field');
+const customFieldWrap  = document.getElementById('custom-field-wrap');
+const detailsMsg       = document.getElementById('details-msg');
+const genNameDisplay   = document.getElementById('gen-name-display');
+const resultImage      = document.getElementById('result-image');
+const resultMsg        = document.getElementById('result-msg');
+const dots             = [0,1,2,3].map(i => document.getElementById(`dot-${i}`));
+
+// ---------------------------------------------------------------------------
+// Navigation helpers
+// ---------------------------------------------------------------------------
+const sections = ['camera','details','generating','result'];
+
+function showSection(name) {
+  sections.forEach((s, i) => {
+    const el = document.getElementById(`section-${s}`);
+    el.classList.toggle('active', s === name);
+    const idx = sections.indexOf(name);
+    dots[i].className = 'step-dot' +
+      (i < idx ? ' done' : i === idx ? ' active' : '');
+  });
+}
+
+function showMsg(el, text, type) {
+  el.textContent  = text;
+  el.className    = `status-msg ${type}`;
+}
+function clearMsg(el) {
+  el.textContent = '';
+  el.className   = 'status-msg';
+}
+
+// ---------------------------------------------------------------------------
+// Camera
+// ---------------------------------------------------------------------------
+async function startCamera() {
+  try {
+    state.stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+      audio: false
+    });
+    webcam.srcObject = state.stream;
+    webcam.style.display  = 'block';
+    snapshot.style.display = 'none';
+    camButtonsInit.style.display   = 'flex';
+    camButtonsRetake.style.display = 'none';
+    clearMsg(camMsg);
+  } catch (err) {
+    showMsg(camMsg, 'Could not access webcam. Please allow camera permission and refresh.', 'error');
+  }
+}
+
+function stopCamera() {
+  if (state.stream) {
+    state.stream.getTracks().forEach(t => t.stop());
+    state.stream = null;
+  }
+}
+
+btnCapture.addEventListener('click', async () => {
+  const canvas = document.createElement('canvas');
+  canvas.width  = webcam.videoWidth  || 1280;
+  canvas.height = webcam.videoHeight || 720;
+  canvas.getContext('2d').drawImage(webcam, 0, 0);
+  const dataURL = canvas.toDataURL('image/jpeg', 0.92);
+
+  // Show preview
+  snapshot.src           = dataURL;
+  snapshot.style.display = 'block';
+  webcam.style.display   = 'none';
+  camButtonsInit.style.display   = 'none';
+  camButtonsRetake.style.display = 'flex';
+  stopCamera();
+
+  // Upload to server
+  btnUsePhoto.disabled = true;
+  showMsg(camMsg, 'Uploading photo…', 'info');
+  try {
+    const resp = await fetch('/api/capture', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: dataURL, session_id: state.sessionId })
+    });
+    const data = await resp.json();
+    if (!data.ok) throw new Error(data.error || 'Upload failed.');
+    state.sessionId = data.session_id;
+    clearMsg(camMsg);
+  } catch (err) {
+    showMsg(camMsg, err.message, 'error');
+  } finally {
+    btnUsePhoto.disabled = false;
+  }
+});
+
+btnRetake.addEventListener('click', async () => {
+  if (state.sessionId) {
+    fetch('/api/retake', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: state.sessionId })
+    });
+    state.sessionId = null;
+  }
+  await startCamera();
+});
+
+btnUsePhoto.addEventListener('click', () => {
+  if (!state.sessionId) {
+    showMsg(camMsg, 'Photo not uploaded yet, please wait.', 'error');
+    return;
+  }
+  showSection('details');
+});
+
+btnBackCamera.addEventListener('click', async () => {
+  if (state.sessionId) {
+    fetch('/api/retake', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: state.sessionId })
+    });
+    state.sessionId = null;
+  }
+  await startCamera();
+  showSection('camera');
+});
+
+// ---------------------------------------------------------------------------
+// Field dropdown
+// ---------------------------------------------------------------------------
+inputField.addEventListener('change', () => {
+  customFieldWrap.style.display =
+    inputField.value === 'other' ? 'block' : 'none';
+});
+
+// ---------------------------------------------------------------------------
+// Generate
+// ---------------------------------------------------------------------------
+btnGenerate.addEventListener('click', async () => {
+  clearMsg(detailsMsg);
+
+  const name  = inputName.value.trim();
+  const email = inputEmail.value.trim();
+  const field = inputField.value === 'other'
+    ? inputCustomField.value.trim()
+    : inputField.value;
+
+  if (!name)  return showMsg(detailsMsg, 'Please enter your name.', 'error');
+  if (!email || !email.includes('@'))
+    return showMsg(detailsMsg, 'Please enter a valid email address.', 'error');
+  if (!field) return showMsg(detailsMsg, 'Please select or enter your research field.', 'error');
+  if (!state.sessionId)
+    return showMsg(detailsMsg, 'No photo on file — please go back and take your photo.', 'error');
+
+  genNameDisplay.textContent = name + ',';
+  showSection('generating');
+
+  try {
+    const resp = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id:     state.sessionId,
+        research_field: field,
+        name:           name,
+        email:          email,
+      })
+    });
+    const data = await resp.json();
+    if (!data.ok) throw new Error(data.error || 'Generation failed.');
+
+    // Show result
+    resultImage.src          = data.image_url;
+    resultImage.style.display = 'block';
+    showSection('result');
+
+  } catch (err) {
+    // Return to details with error
+    showSection('details');
+    showMsg(detailsMsg, err.message, 'error');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Restart
+// ---------------------------------------------------------------------------
+btnRestart.addEventListener('click', async () => {
+  state.sessionId = null;
+  resultImage.src  = '';
+  resultImage.style.display = 'none';
+  inputName.value  = '';
+  inputEmail.value = '';
+  inputField.value = '';
+  inputCustomField.value = '';
+  customFieldWrap.style.display = 'none';
+  clearMsg(detailsMsg);
+  await startCamera();
+  showSection('camera');
+});
+
+// ---------------------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------------------
+startCamera();
+</script>
+</body>
+</html>

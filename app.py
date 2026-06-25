@@ -168,7 +168,7 @@ def api_generate():
     save_id = uuid.uuid4().hex
 
     try:
-        out_video = pipeline.generate_portrait(photo_path, research_field, save_id)
+        out_image = pipeline.generate_portrait(photo_path, research_field, save_id)
     except pipeline.KioskPipelineError as e:
         logger.warning("[%s] Generation failed: %s", session_id, e)
         return jsonify({"ok": False, "error": str(e)}), 422
@@ -190,7 +190,7 @@ def api_generate():
         f"name={name}\n"
         f"email={email}\n"
         f"field={research_field}\n"
-        f"video={out_video.name}\n",
+        f"video={out_image.name}\n",
         encoding="utf-8"
     )
 
@@ -200,7 +200,7 @@ def api_generate():
     )
     return jsonify({
         "ok":       True,
-        "video_url": f"/outputs/{out_video.name}",
+        "image_url": f"/outputs/{out_image.name}",
         "save_id":  save_id,
     })
 

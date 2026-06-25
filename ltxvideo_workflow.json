@@ -1,6 +1,4 @@
 {
-  "_comment": "LTX-Video 2.3 image-to-video workflow with Fantasy Anime LoRA. Drop into ComfyUI as a workflow JSON. Nodes are wired: LoadImage -> VAEEncodeForInpaint -> LTXVImageToVideo -> KSampler -> VAEDecode -> SaveAnimatedWEBP. The API server replaces __INPUT_IMAGE_PATH__ and __POSITIVE_PROMPT__ at runtime.",
-
   "1": {
     "class_type": "LoadImage",
     "inputs": {
@@ -8,82 +6,124 @@
       "upload": "image"
     }
   },
-
   "2": {
     "class_type": "CheckpointLoaderSimple",
     "inputs": {
       "ckpt_name": "ltx-video-2b-v0.9.5.safetensors"
     }
   },
-
   "3": {
-    "class_type": "LoraLoader",
+    "class_type": "LoraLoaderModelOnly",
     "inputs": {
-      "model": ["2", 0],
-      "clip": ["2", 1],
-      "lora_name": "LTX_2.3_Fantasy_Anime_Style_LoRa.safetensors",
-      "strength_model": 0.65,
-      "strength_clip": 0.65
+      "model": [
+        "2",
+        0
+      ],
+      "lora_name": "Fantasy_Anime.safetensors",
+      "strength_model": 0.65
     }
   },
-
+  "11": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "t5xxl_fp16.safetensors",
+      "type": "ltxv",
+      "device": "default"
+    }
+  },
   "4": {
     "class_type": "CLIPTextEncode",
     "inputs": {
-      "clip": ["3", 1],
+      "clip": [
+        "11",
+        0
+      ],
       "text": "__POSITIVE_PROMPT__"
     }
   },
-
   "5": {
     "class_type": "CLIPTextEncode",
     "inputs": {
-      "clip": ["3", 1],
-      "text": "blurry, low quality, distorted face, extra limbs, bad anatomy, text, watermark, duplicate, ugly, deformed, out of frame"
+      "clip": [
+        "11",
+        0
+      ],
+      "text": "blurry, low quality, distorted face, extra limbs, bad anatomy, text, watermark, duplicate, ugly, deformed, out of frame, multiple people, crowd, sitting, slouching"
     }
   },
-
-  "6": {
-    "class_type": "LTXVImageToVideo",
+  "10": {
+    "class_type": "LTXVImgToVideo",
     "inputs": {
-      "model": ["3", 0],
-      "image": ["1", 0],
-      "vae": ["2", 2],
+      "positive": [
+        "4",
+        0
+      ],
+      "negative": [
+        "5",
+        0
+      ],
+      "vae": [
+        "2",
+        2
+      ],
+      "image": [
+        "1",
+        0
+      ],
       "width": 768,
       "height": 512,
-      "num_frames": 97,
-      "frame_rate": 24
+      "length": 97,
+      "batch_size": 1,
+      "strength": 0.85
     }
   },
-
   "7": {
     "class_type": "KSampler",
     "inputs": {
-      "model": ["3", 0],
-      "positive": ["4", 0],
-      "negative": ["5", 0],
-      "latent_image": ["6", 0],
-      "seed": -1,
+      "model": [
+        "3",
+        0
+      ],
+      "positive": [
+        "10",
+        0
+      ],
+      "negative": [
+        "10",
+        1
+      ],
+      "latent_image": [
+        "10",
+        2
+      ],
+      "seed": 138849060,
       "steps": 30,
       "cfg": 3.5,
       "sampler_name": "euler",
       "scheduler": "beta",
-      "denoise": 0.85
+      "denoise": 1.0
     }
   },
-
   "8": {
     "class_type": "VAEDecode",
     "inputs": {
-      "samples": ["7", 0],
-      "vae": ["2", 2]
+      "samples": [
+        "7",
+        0
+      ],
+      "vae": [
+        "2",
+        2
+      ]
     }
   },
-
   "9": {
     "class_type": "VHS_VideoCombine",
     "inputs": {
-      "images": ["8", 0],
+      "images": [
+        "8",
+        0
+      ],
       "frame_rate": 24,
       "loop_count": 0,
       "filename_prefix": "__OUTPUT_FILENAME_PREFIX__",

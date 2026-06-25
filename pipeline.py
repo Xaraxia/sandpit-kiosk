@@ -27,7 +27,7 @@ logger = logging.getLogger("kiosk.pipeline")
 # ---------------------------------------------------------------------------
 
 COMFYUI_URL        = "http://localhost:8188"
-WORKFLOW_PATH      = Path(__file__).resolve().parent / "flux_pulid_workflow.json"
+WORKFLOW_PATH      = Path(__file__).resolve().parent / "flux_kontext_workflow.json"
 OUTPUT_DIR         = Path(__file__).resolve().parent / "outputs"
 TEMP_DIR           = Path(__file__).resolve().parent / "temp"
 COMFYUI_OUTPUT_DIR = Path.home() / "ComfyUI" / "output"
@@ -53,12 +53,15 @@ FIELD_MOTIFS = {
     "other":                 "radiant abstract energy patterns, swirling light particles, dramatic volumetric light rays",
 }
 
+# Kontext uses editing instructions, not descriptions.
+# Tell it what to change, keep the rest implicit.
 PROMPT_TEMPLATE = (
-    "anime style portrait, cel shaded illustration, expressive anime eyes, "
-    "clean linework, vibrant colors, person in triumphant heroic pose "
-    "with one fist raised, confident warm expression, looking at viewer, "
-    "dramatic upward lighting, {field_motif} in background, "
-    "high quality anime art, detailed face, studio lighting"
+    "Convert this photo to a vibrant anime illustration. "
+    "Keep the person's face, identity and expression exactly the same. "
+    "Render in cel-shaded anime style with clean linework and expressive eyes. "
+    "Show the person in a triumphant heroic pose with one fist raised. "
+    "Add {field_motif} dramatically in the background. "
+    "High quality anime art style."
 )
 
 # ---------------------------------------------------------------------------

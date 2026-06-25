@@ -41,36 +41,84 @@ PLACEHOLDER_PROMPT  = "__POSITIVE_PROMPT__"
 PLACEHOLDER_PREFIX  = "__OUTPUT_FILENAME_PREFIX__"
 
 # ---------------------------------------------------------------------------
-# Research field -> background/scene motif
+# Theme -> (setting, costume/prop, motif) bundle
 #
-# Same pattern as the earlier (abandoned) Flux pipeline: per-discipline
-# background dressing layered onto the fixed superhero-researcher template.
-# Keys are matched case-insensitively against the dropdown values the
-# frontend sends (see app.py RESEARCH_FIELDS).
+# Categories are aesthetic, not discipline — chosen deliberately so every
+# option renders visually distinct from every other, rather than trying to
+# make e.g. "Physics" and "Engineering" look different when they don't.
+# Pose is intentionally NOT varied per theme: IPAdapter's identity
+# conditioning fights pose changes hard enough that it isn't worth chasing
+# per-theme poses — see conversation history. Only setting/costume/motif
+# vary; the base pose phrase stays fixed in PROMPT_TEMPLATE.
+#
+# Keys are matched case-insensitively against whatever the frontend sends
+# as research_field (see app.py / index.html theme dropdown).
 # ---------------------------------------------------------------------------
 
-FIELD_MOTIFS = {
-    "physics":               "glowing particle accelerator rings, floating luminous equations, electric plasma arcs",
-    "biology":                "bioluminescent spores, softly glowing dna helices, organic light trails",
-    "computer science":       "cascading streams of glowing code, holographic data structures, circuit light patterns",
-    "medicine":               "radiant caduceus symbols, soft pulse waveforms, glowing cellular structures",
-    "chemistry":              "crystalline molecular bonds, glowing periodic element symbols, prism refractions",
-    "engineering":            "blueprint grid dissolving into golden light, structural framework glowing, gear mechanisms in light",
-    "astronomy":              "deep space nebula clouds, star field with comet trails, galactic spiral arms glowing",
-    "psychology":             "synaptic light connections, soft neural network patterns, calm aurora waves",
-    "mathematics":            "golden ratio spiral in light, floating geometric proofs, fractal patterns blooming",
-    "environmental science":  "aurora borealis ribbons, bioluminescent ocean wave patterns, soft leaf and wind particles",
-    "other":                  "radiant abstract energy patterns, swirling light particles, dramatic volumetric light rays",
+THEMES = {
+    "in the lab": {
+        "setting": "bright high-tech laboratory, glass beakers and glowing vials in the background",
+        "costume": "white lab coat, safety goggles pushed up on forehead",
+        "motif":   "crystalline molecular bonds glowing softly, faint chemical reaction sparkles",
+    },
+    "research computing": {
+        "setting": "dark server room lit by screen glow, floating holographic data panels",
+        "costume": "casual modern tech-wear, hoodie or smart-casual jacket, no lab coat",
+        "motif":   "cascading streams of glowing code, translucent data structures suspended in air",
+    },
+    "health": {
+        "setting": "clean clinical space, soft cool lighting, calm atmosphere",
+        "costume": "medical scrubs or white coat with stethoscope",
+        "motif":   "gentle pulse waveforms glowing blue, soft radiant caduceus light accents",
+    },
+    "engineering": {
+        "setting": "industrial workshop or construction site, structural beams and scaffolding",
+        "costume": "hard hat, tool belt, rolled-up sleeves",
+        "motif":   "blueprint grid lines dissolving into golden light, glowing gear mechanisms",
+    },
+    "star-gazing": {
+        "setting": "open night sky observatory, telescope silhouette nearby",
+        "costume": "warm jacket, casual outdoor wear, no lab coat",
+        "motif":   "deep space nebula clouds, star field with comet trails, galactic spiral arms glowing",
+    },
+    "bookworm": {
+        "setting": "cozy towering library, warm lamplight, stacks of books",
+        "costume": "knit sweater or cardigan, glasses, holding an open book",
+        "motif":   "softly glowing dust motes in lamplight, faint golden page-light spilling from books",
+    },
+    "performer": {
+        "setting": "dramatic stage with spotlight, dark background, faint audience silhouette",
+        "costume": "stylish stage outfit, microphone or instrument nearby",
+        "motif":   "warm spotlight beams, soft glowing stage haze, dynamic light trails",
+    },
+    "villain": {
+        "setting": "dark dramatic lair, storm clouds or shadowy architecture",
+        "costume": "sleek dark coat, dramatic silhouette",
+        "motif":   "deep purple and red ambient glow, electric energy crackling at the edges",
+    },
+    "animal lover": {
+        "setting": "sunlit meadow or cozy nature scene",
+        "costume": "casual outdoor wear",
+        "motif":   "a friendly Australian ibis standing calmly nearby (a wombat or possum is also acceptable), soft natural lighting, gentle warm tones",
+    },
+    # Fallback if the frontend ever sends an unrecognised value. Never errors —
+    # generic celebratory motif, no specific setting/costume claims.
+    "other": {
+        "setting": "an inspiring, light-filled space",
+        "costume": "smart casual outfit",
+        "motif":   "radiant abstract energy patterns, swirling light particles, dramatic volumetric light rays",
+    },
 }
 
 # Tag-style prompt (Animagine/SDXL convention), not instruction-style.
-# {field_motif} is substituted per guest; everything else is fixed and
-# matches the tuned settings from animagine_workflow.json.
+# {setting}/{costume}/{motif} are substituted per guest's theme choice.
+# Pose phrase ("dynamic confident pose") stays fixed across all themes —
+# IPAdapter overrides pose attempts regardless of what's requested here,
+# so this is kept simple rather than chasing a per-theme pose that won't render.
 PROMPT_TEMPLATE = (
     "masterpiece, best quality, year 2024, crisp anime style, 1person, solo, "
-    "detailed face, identity-preserving, superhero researcher costume, "
-    "superhero pose, standing in a high-tech laboratory, supercomputer screens, "
-    "{field_motif}, vibrant colors, realistic skintone"
+    "detailed face, identity-preserving, {costume}, dynamic confident pose, "
+    "{setting}, {motif}, vibrant colors, realistic skintone"
 )
 
 # ---------------------------------------------------------------------------
@@ -235,9 +283,9 @@ def generate_portrait(photo_path: Path, research_field: str, save_id: str) -> Pa
 
     Args:
         photo_path:     Path to webcam capture JPEG (deleted after upload).
-        research_field: Guest's field (selects background motif). Falls back
-                         to a generic motif if unrecognised — never errors
-                         on this field, since it only affects flavour text.
+        research_field: Guest's chosen theme key (selects setting/costume/
+                         motif bundle from THEMES). Falls back to a generic
+                         theme if unrecognised — never errors on this field.
         save_id:        UUID stem for output filename.
 
     Returns:
@@ -248,10 +296,14 @@ def generate_portrait(photo_path: Path, research_field: str, save_id: str) -> Pa
     if not photo_path.exists():
         raise KioskPipelineError("Photo missing. Please retake your photo.")
 
-    # Build prompt
-    motif  = FIELD_MOTIFS.get(research_field.strip().lower(), FIELD_MOTIFS["other"])
-    prompt = PROMPT_TEMPLATE.format(field_motif=motif)
-    logger.info("[%s] Field: %s | Prompt: %.120s...", save_id, research_field, prompt)
+    # Build prompt from the chosen theme's (setting, costume, motif) bundle
+    theme  = THEMES.get(research_field.strip().lower(), THEMES["other"])
+    prompt = PROMPT_TEMPLATE.format(
+        setting=theme["setting"],
+        costume=theme["costume"],
+        motif=theme["motif"],
+    )
+    logger.info("[%s] Theme: %s | Prompt: %.120s...", save_id, research_field, prompt)
 
     # Upload photo
     try:

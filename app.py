@@ -1,17 +1,17 @@
 """
 app.py
 ------
-Flask kiosk server for the AI portrait video booth.
+Flask kiosk server for the AI portrait booth.
 Accepts webcam photos + guest details, queues generation via ComfyUI,
-saves UUID-paired output files, and returns the video to the browser.
+saves UUID-paired output files, and returns the image to the browser.
 
 Endpoints:
     GET  /                  -> kiosk page
     POST /api/capture       -> save webcam frame as working photo
-    POST /api/generate      -> run generation, save output pair, return video URL
+    POST /api/generate      -> run generation, save output pair, return image URL
     POST /api/retake        -> discard current working photo
-    GET  /api/fields        -> research field list for dropdown
-    GET  /outputs/<file>    -> serve a generated video
+    GET  /api/fields        -> theme list for dropdown
+    GET  /outputs/<file>    -> serve a generated image
     GET  /api/status        -> health check
 """
 
@@ -37,9 +37,8 @@ TEMP_DIR   = BASE_DIR / "temp"
 OUTPUT_DIR = BASE_DIR / "outputs"
 
 RESEARCH_FIELDS = [
-    "Physics", "Biology", "Computer Science", "Medicine", "Chemistry",
-    "Engineering", "Astronomy", "Psychology", "Mathematics",
-    "Environmental Science",
+    "In the Lab", "Research Computing", "Health", "Engineering",
+    "Star-gazing", "Bookworm", "Performer", "Villain", "Animal Lover",
 ]
 
 # ---------------------------------------------------------------------------
@@ -61,7 +60,7 @@ def _session_photo_path(session_id: str) -> Path:
 
 @app.route("/")
 def index():
-    return render_template("index.html", fields=RESEARCH_FIELDS)
+    return render_template("index.html")
 
 
 @app.route("/api/fields")
@@ -126,16 +125,16 @@ def api_generate():
 
     Expects JSON body:
         session_id      str   -- from /api/capture
-        research_field  str   -- selected field
+        research_field  str   -- selected theme
         name            str   -- guest's name (for email dispatch)
         email           str   -- guest's email address
 
     On success, saves:
-        outputs/<save_id>.mp4   -- the generated video
+        outputs/<save_id>.png   -- the generated image
         outputs/<save_id>.txt   -- name + email for post-event dispatch
 
     Returns:
-        { ok: true, video_url: "/outputs/<save_id>.mp4", save_id: "..." }
+        { ok: true, image_url: "/outputs/<save_id>.png", save_id: "..." }
     """
     data           = request.get_json(silent=True) or {}
     session_id     = data.get("session_id")
@@ -152,7 +151,7 @@ def api_generate():
         return jsonify({"ok": False, "error": "Session expired. Please retake your photo."}), 400
 
     if not research_field:
-        return jsonify({"ok": False, "error": "Please choose or enter a research field."}), 400
+        return jsonify({"ok": False, "error": "Please choose a theme."}), 400
 
     if not name:
         return jsonify({"ok": False, "error": "Please enter your name."}), 400

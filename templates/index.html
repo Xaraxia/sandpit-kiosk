@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Research Portrait Kiosk</title>
+<title>Anime Yourself — Research & Innovation Week AI Sandpit</title>
 <style>
   /* ── Tokens ── */
   :root {
@@ -169,9 +169,6 @@
   }
   select option { background: var(--surface2); }
 
-  /* custom field text input */
-  #custom-field-wrap { margin-top: 0.6rem; display: none; }
-
   /* ── Buttons ── */
   .btn {
     display: inline-flex;
@@ -264,8 +261,8 @@
 <body>
 
 <header>
-  <h1>Research Portrait Studio</h1>
-  <p>Strike your best hero pose — we'll render you as a cinematic anime character in your field of research.</p>
+  <h1>Anime Yourself</h1>
+  <p>Research &amp; Innovation Week AI Sandpit — strike a pose and we'll render you as a cinematic anime character in a theme of your choosing.</p>
 </header>
 
 <!-- Progress dots -->
@@ -279,6 +276,9 @@
 <!-- ── Step 0: Camera ── -->
 <div class="card section active" id="section-camera">
   <h2>Step 1 — Take your photo</h2>
+  <p style="color:var(--muted);font-size:0.9rem;margin-bottom:1rem;line-height:1.5;">
+    Strike a pose — just stay close enough that your face is clearly in frame.
+  </p>
   <div class="cam-wrap">
     <video id="webcam" autoplay playsinline muted></video>
     <img id="snapshot" alt="Your captured photo">
@@ -305,18 +305,19 @@
   <label for="input-email">Email address <span style="color:var(--muted);font-weight:400">(we'll send your video here)</span></label>
   <input type="email" id="input-email" placeholder="jane@university.edu.au" autocomplete="off">
 
-  <label for="input-field">Field of research</label>
+  <label for="input-field">Pick your theme</label>
   <select id="input-field">
-    <option value="" disabled selected>Choose your field…</option>
-    {% for f in fields %}
-    <option value="{{ f.lower() }}">{{ f }}</option>
-    {% endfor %}
-    <option value="other">Other…</option>
+    <option value="" disabled selected>Choose your theme…</option>
+    <option value="in the lab">In the Lab</option>
+    <option value="research computing">Research Computing</option>
+    <option value="health">Health</option>
+    <option value="engineering">Engineering</option>
+    <option value="star-gazing">Star-gazing</option>
+    <option value="bookworm">Bookworm</option>
+    <option value="performer">Performer</option>
+    <option value="villain">Villain</option>
+    <option value="animal lover">Animal Lover</option>
   </select>
-
-  <div id="custom-field-wrap">
-    <input type="text" id="input-custom-field" placeholder="e.g. Marine Archaeology">
-  </div>
 
   <div id="details-msg" class="status-msg"></div>
   <button class="btn btn-primary" id="btn-generate">✨ Generate my portrait</button>
@@ -331,7 +332,7 @@
     <p>
       <strong id="gen-name-display"></strong>
       Generating your cinematic anime portrait.<br>
-      This takes about 30–60 seconds — strike a pose and hold it! 🦸
+      This takes about 30–60 seconds — almost there! ✨
     </p>
   </div>
 </div>
@@ -339,7 +340,7 @@
 <!-- ── Step 3: Result ── -->
 <div class="card section" id="section-result">
   <h2>Your portrait is ready!</h2>
-  <video id="result-video" autoplay loop muted playsinline controls></video>
+  <img id="result-image" style="width:100%;border-radius:12px;display:none" alt="Your anime portrait">
   <div id="result-msg" class="status-msg success">
     We'll email this to you after the event. Thanks for stopping by!
   </div>
@@ -372,11 +373,9 @@ const btnRestart       = document.getElementById('btn-restart');
 const inputName        = document.getElementById('input-name');
 const inputEmail       = document.getElementById('input-email');
 const inputField       = document.getElementById('input-field');
-const inputCustomField = document.getElementById('input-custom-field');
-const customFieldWrap  = document.getElementById('custom-field-wrap');
 const detailsMsg       = document.getElementById('details-msg');
 const genNameDisplay   = document.getElementById('gen-name-display');
-const resultVideo      = document.getElementById('result-video');
+const resultImage      = document.getElementById('result-image');
 const resultMsg        = document.getElementById('result-msg');
 const dots             = [0,1,2,3].map(i => document.getElementById(`dot-${i}`));
 
@@ -431,11 +430,62 @@ function stopCamera() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Capture cropping
+//
+// #webcam is displayed via CSS `object-fit: cover` inside a 4:3 box
+// (.cam-wrap). The underlying camera stream is requested at 1280x720
+// (16:9) but most webcams hand back something close-but-not-exact, so we
+// compute the crop from the box's target ratio against whatever the video
+// element actually reports — never assume the requested resolution landed.
+//
+// `cover` scales the source until it fills the box on both axes, then
+// clips the overflow on whichever axis is "too long". For a wider-than-4:3
+// source (the normal case), that means clipping equal slices off the left
+// and right — never the top or bottom. This function reproduces that
+// exact crop region in source-pixel coordinates so what gets captured is
+// pixel-for-pixel what the guest saw in the live preview, not the full
+// uncropped sensor frame.
+// ---------------------------------------------------------------------------
+function getCoverCrop(sourceWidth, sourceHeight, targetAspect) {
+  const sourceAspect = sourceWidth / sourceHeight;
+
+  if (sourceAspect > targetAspect) {
+    // Source is wider than the box -> clip left/right, keep full height.
+    const cropWidth = sourceHeight * targetAspect;
+    return {
+      sx: (sourceWidth - cropWidth) / 2,
+      sy: 0,
+      sw: cropWidth,
+      sh: sourceHeight,
+    };
+  } else {
+    // Source is taller than the box -> clip top/bottom, keep full width.
+    const cropHeight = sourceWidth / targetAspect;
+    return {
+      sx: 0,
+      sy: (sourceHeight - cropHeight) / 2,
+      sw: sourceWidth,
+      sh: cropHeight,
+    };
+  }
+}
+
+const CAM_WRAP_ASPECT = 4 / 3; // must match .cam-wrap's CSS aspect-ratio
+
 btnCapture.addEventListener('click', async () => {
+  const videoWidth  = webcam.videoWidth  || 1280;
+  const videoHeight = webcam.videoHeight || 720;
+  const crop = getCoverCrop(videoWidth, videoHeight, CAM_WRAP_ASPECT);
+
   const canvas = document.createElement('canvas');
-  canvas.width  = webcam.videoWidth  || 1280;
-  canvas.height = webcam.videoHeight || 720;
-  canvas.getContext('2d').drawImage(webcam, 0, 0);
+  canvas.width  = crop.sw;
+  canvas.height = crop.sh;
+  canvas.getContext('2d').drawImage(
+    webcam,
+    crop.sx, crop.sy, crop.sw, crop.sh,   // source rect: the cropped region
+    0, 0, crop.sw, crop.sh                // dest rect: fill the canvas 1:1
+  );
   const dataURL = canvas.toDataURL('image/jpeg', 0.92);
 
   // Show preview
@@ -500,14 +550,6 @@ btnBackCamera.addEventListener('click', async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Field dropdown
-// ---------------------------------------------------------------------------
-inputField.addEventListener('change', () => {
-  customFieldWrap.style.display =
-    inputField.value === 'other' ? 'block' : 'none';
-});
-
-// ---------------------------------------------------------------------------
 // Generate
 // ---------------------------------------------------------------------------
 btnGenerate.addEventListener('click', async () => {
@@ -515,14 +557,12 @@ btnGenerate.addEventListener('click', async () => {
 
   const name  = inputName.value.trim();
   const email = inputEmail.value.trim();
-  const field = inputField.value === 'other'
-    ? inputCustomField.value.trim()
-    : inputField.value;
+  const field = inputField.value;
 
   if (!name)  return showMsg(detailsMsg, 'Please enter your name.', 'error');
   if (!email || !email.includes('@'))
     return showMsg(detailsMsg, 'Please enter a valid email address.', 'error');
-  if (!field) return showMsg(detailsMsg, 'Please select or enter your research field.', 'error');
+  if (!field) return showMsg(detailsMsg, 'Please select a theme.', 'error');
   if (!state.sessionId)
     return showMsg(detailsMsg, 'No photo on file — please go back and take your photo.', 'error');
 
@@ -544,8 +584,8 @@ btnGenerate.addEventListener('click', async () => {
     if (!data.ok) throw new Error(data.error || 'Generation failed.');
 
     // Show result
-    resultVideo.src          = data.video_url;
-    resultVideo.style.display = 'block';
+    resultImage.src          = data.image_url;
+    resultImage.style.display = 'block';
     showSection('result');
 
   } catch (err) {
@@ -560,13 +600,11 @@ btnGenerate.addEventListener('click', async () => {
 // ---------------------------------------------------------------------------
 btnRestart.addEventListener('click', async () => {
   state.sessionId = null;
-  resultVideo.src  = '';
-  resultVideo.style.display = 'none';
+  resultImage.src  = '';
+  resultImage.style.display = 'none';
   inputName.value  = '';
   inputEmail.value = '';
   inputField.value = '';
-  inputCustomField.value = '';
-  customFieldWrap.style.display = 'none';
   clearMsg(detailsMsg);
   await startCamera();
   showSection('camera');

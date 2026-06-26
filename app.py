@@ -189,7 +189,7 @@ def api_generate():
         f"name={name}\n"
         f"email={email}\n"
         f"field={research_field}\n"
-        f"video={out_image.name}\n",
+        f"image={out_image.name}\n",
         encoding="utf-8"
     )
 

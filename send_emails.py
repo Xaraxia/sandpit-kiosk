@@ -2,7 +2,7 @@
 send_emails.py
 --------------
 Post-event script. Walks the outputs/ directory, matches UUID pairs
-(.mp4 + .txt), and emails each guest their generated video.
+(.png + .txt), and emails each guest their generated portrait.
 
 Run AFTER the event, not during it.
 
@@ -36,8 +36,7 @@ import smtplib
 import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
+from email.mime.image import MIMEImage
 from pathlib import Path
 
 logging.basicConfig(
@@ -56,15 +55,15 @@ SMTP_USER     = os.environ.get("SMTP_USER",     "")
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
 SMTP_FROM     = os.environ.get("SMTP_FROM",     "AI Kiosk <kiosk@your-university.edu.au>")
 
-EMAIL_SUBJECT = "Your AI portrait video from today's event!"
+EMAIL_SUBJECT = "Your Anime Yourself portrait from today's event!"
 
 EMAIL_BODY_TEMPLATE = """\
 Hi {name},
 
-Thanks for stopping by the AI portrait kiosk today!
+Thanks for stopping by Anime Yourself at the AI Sandpit today!
 
-Your personalised video is attached — a {field} researcher rendered in
-cinematic fantasy anime style, complete with dramatic {field} background effects.
+Your personalised portrait is attached — rendered in cinematic anime
+style with a "{field}" theme.
 
 Feel free to share it however you like.
 
@@ -87,8 +86,8 @@ def parse_txt(txt_path: Path) -> dict:
     return result
 
 
-def send_one(name: str, email: str, field: str, video_path: Path, dry_run: bool) -> bool:
-    """Send a single email with the video attached. Returns True on success."""
+def send_one(name: str, email: str, field: str, image_path: Path, dry_run: bool) -> bool:
+    """Send a single email with the portrait attached. Returns True on success."""
     body = EMAIL_BODY_TEMPLATE.format(name=name, field=field)
 
     msg = MIMEMultipart()
@@ -97,19 +96,17 @@ def send_one(name: str, email: str, field: str, video_path: Path, dry_run: bool)
     msg["Subject"] = EMAIL_SUBJECT
     msg.attach(MIMEText(body, "plain"))
 
-    # Attach video
-    with open(video_path, "rb") as f:
-        part = MIMEBase("video", "mp4")
-        part.set_payload(f.read())
-    encoders.encode_base64(part)
-    part.add_header(
+    # Attach portrait image
+    with open(image_path, "rb") as f:
+        img_part = MIMEImage(f.read(), _subtype="png")
+    img_part.add_header(
         "Content-Disposition",
-        f'attachment; filename="{video_path.name}"'
+        f'attachment; filename="{image_path.name}"'
     )
-    msg.attach(part)
+    msg.attach(img_part)
 
     if dry_run:
-        logger.info("[DRY RUN] Would send to %s <%s> (%s)", name, email, video_path.name)
+        logger.info("[DRY RUN] Would send to %s <%s> (%s)", name, email, image_path.name)
         return True
 
     try:
@@ -161,10 +158,10 @@ def main():
 
     for txt_path in txt_files:
         save_id    = txt_path.stem
-        video_path = outputs_dir / f"{save_id}.mp4"
+        image_path = outputs_dir / f"{save_id}.png"
 
-        if not video_path.exists():
-            logger.warning("No video found for %s — skipping.", save_id)
+        if not image_path.exists():
+            logger.warning("No image found for %s — skipping.", save_id)
             continue
 
         try:
@@ -176,21 +173,21 @@ def main():
 
         name  = guest.get("name",  "Guest")
         email = guest.get("email", "")
-        field = guest.get("field", "research")
+        field = guest.get("field", "theme")
 
         if not email:
             logger.warning("No email in %s — skipping.", txt_path.name)
             error_count += 1
             continue
 
-        success = send_one(name, email, field, video_path, args.dry_run)
+        success = send_one(name, email, field, image_path, args.dry_run)
 
         if success:
             sent_count += 1
             # Archive both files so re-runs don't re-send
             if not args.dry_run:
                 shutil.move(str(txt_path),   sent_dir / txt_path.name)
-                shutil.move(str(video_path), sent_dir / video_path.name)
+                shutil.move(str(image_path), sent_dir / image_path.name)
         else:
             error_count += 1
 

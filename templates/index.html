@@ -96,7 +96,8 @@
     background: var(--surface2);
     border-radius: var(--radius);
     overflow: hidden;
-    aspect-ratio: 4/3;
+    /*aspect-ratio: 4/3;*/
+    aspect-ratio: 1;
     width: 100%;
   }
   #webcam, #snapshot {
@@ -471,7 +472,8 @@ function getCoverCrop(sourceWidth, sourceHeight, targetAspect) {
   }
 }
 
-const CAM_WRAP_ASPECT = 4 / 3; // must match .cam-wrap's CSS aspect-ratio
+//const CAM_WRAP_ASPECT = 4 / 3; // must match .cam-wrap's CSS aspect-ratio
+const CAM_WRAP_ASPECT = 1; // must match .cam-wrap's CSS aspect-ratio
 
 btnCapture.addEventListener('click', async () => {
   const videoWidth  = webcam.videoWidth  || 1280;

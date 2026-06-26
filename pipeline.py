@@ -61,7 +61,7 @@ THEMES = {
         "costume": "white lab coat, safety goggles pushed up on forehead",
         "motif":   "crystalline molecular bonds glowing softly, faint chemical reaction sparkles",
     },
-    "research computing": {
+    "computing": {
         "setting": "dark server room lit by screen glow, floating holographic data panels",
         "costume": "casual modern tech-wear, hoodie or smart-casual jacket, no lab coat",
         "motif":   "cascading streams of glowing code, translucent data structures suspended in air",

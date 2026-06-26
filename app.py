@@ -37,7 +37,7 @@ TEMP_DIR   = BASE_DIR / "temp"
 OUTPUT_DIR = BASE_DIR / "outputs"
 
 RESEARCH_FIELDS = [
-    "In the Lab", "Research Computing", "Health", "Engineering",
+    "In the Lab", "Computing", "Health", "Engineering",
     "Star-gazing", "Bookworm", "Performer", "Villain", "Animal Lover",
 ]
 
